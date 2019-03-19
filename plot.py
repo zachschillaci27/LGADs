@@ -326,26 +326,6 @@ class Site(object):
             theWafer.plot_IVs()
             theWafer.plot_CVs()
 
-### USER GUIDE ###
-
-# 1) Specify directory containting all test results across all sites
-#   directory = main_directory/
-
-# 2) Initialize a site (i.e. collection of sensors across one or more wafers specific to a production site)
-#   ExampleSite = Site(path_to_site, site_name, list_of_wafers, area_of_sensor)
-#      a) the structure must be /directory/path_to_site/
-#      b) provide a string as a name for the site (NOTE: an output directory will be created with this name)
-#      c) provide a list of strings of all wafers specific to the site
-#          i) the string names provided must correspond to the names of the subdirectories within path_to_site/
-#          ii) within each wafer subdirectory there must be separate directories IV/ and CV/ containing all sensor tests specific to the wafer
-#      d) provide the area of the sensor in m**2
-
-# 3) plot all IV and CV results
-#   ExampleSite.show()
-
-###************###
-
-
 # directory = '/Users/zschillaci/Google Drive/TANDEM - Diodes for dosimeters and LGADs - Sept 2018/JSI_Irradiation/'
 directory = '/Users/zschillaci/Google Drive/Sharable Silicon R&D Info/Measurements/JSI_Irradiation_Nov-Dec2018/'
 
