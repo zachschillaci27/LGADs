@@ -3,6 +3,7 @@ import os
 import glob
 import collections
 import numpy as np
+from datetime import datetime
 import matplotlib.pyplot as plt
 
 def setPlotStyle():
@@ -34,7 +35,7 @@ colors = ['#d62728', '#2ca02c', '#1f77b4', '#ff7f0e', '#9a0eea', '#af884a', '#8c
 
 ### FUNDAMENTAL CONSTANTS ###
 
-# SI Units # 
+# SI Units #
 
 #vacuum permittivity
 eps0 = 8.85 * 10**-12
@@ -61,22 +62,47 @@ def get_list_of_infiles(path):
 
     if os.path.isdir(path):
         allfiles = glob.glob(path + '*.txt')
-        
         for afile in allfiles:
-            if ('log' not in afile):
+            if (('log' not in afile) and ('note' not in afile) and ('v2' not in afile)):
                 index = len(afile) - afile[::-1].find('/')
 
                 infiles.append(afile)
                 sensors.append(afile[index : -4])
-                
+
     return infiles, sensors
 
-def setYlim(ylim,yticks):
+def autoscale_y(ax, margin=0.1):
+    # Rescale y-axis based on data that is visible given the current xlim of the axis
+    # ax -- a matplotlib axes object
+    # margin -- the fraction of the total height of the y-data to pad the upper and lower ylims
+
+    def get_bottom_top(line):
+        xd = line.get_xdata()
+        yd = line.get_ydata()
+        lo, hi = ax.get_xlim()
+        y_displayed = yd[((xd > lo) & (xd < hi))]
+        h = np.max(y_displayed) - np.min(y_displayed)
+        bot = np.min(y_displayed) - margin*h
+        top = np.max(y_displayed) + margin*h
+        return bot, top
+
+    lines = ax.get_lines()
+    bot, top = np.inf, -np.inf
+
+    for line in lines:
+        new_bot, new_top = get_bottom_top(line)
+        if (new_bot < bot): bot = new_bot
+        if (new_top > top): top = new_top
+
+    ax.set_ylim(bot, top)
+
+def setYlim(ylim, yticks):
     #Set y-limits of plot based upon min. and max. of plots
+
     tick = abs(yticks[0][1] - yticks[0][0])
 
-    low = ylim[0] - 0.15 * tick
-    high = ylim[-1] + 1.25 * tick
+    low = ylim[0] - 10 * tick
+    high = ylim[-1] + 10 * tick
 
     plt.ylim(low, high)
 
@@ -93,13 +119,13 @@ def analyze_CV(CV, area):
     width, profile = [], []
 
     for n in range(len(CV['voltage'])):
-        
+
         dV, dC = 0, 0
         N = 0
         if ((n > 1) and (n < len(CV['voltage']) - 1)):
 
             dV = CV['voltage'][n + 1] - CV['voltage'][n - 1] # V
-            
+
             # Method 1 #
             dC = (1 / c_scale) * (CV['capacitance'][n + 1] - CV['capacitance'][n - 1]) # F
             N = -1 * constant * ((1 / c_scale) * CV['capacitance'][n])**3 * (dV / dC)  # cm^-3
@@ -111,20 +137,20 @@ def analyze_CV(CV, area):
             '''
 
         w = w_scale * calculate_width((1 / c_scale) * CV['capacitance'][n], area) # um
-        
+
         width.append(w)
         profile.append(N)
 
     return width, profile
 
 class Sensor(object):
-    def __init__(self, infile, area):
+    def __init__(self, infile, area=None):
         self.infile = infile
         self.area = area
 
     def load_IV(self):
         #voltage, pad, ring, current
-        data = np.loadtxt(self.infile, delimiter=',', skiprows=2)
+        data = np.loadtxt(self.infile, delimiter=',', skiprows=3)
 
         voltage, pad, ring, current = [], [], [], []
         for row in data:
@@ -137,7 +163,7 @@ class Sensor(object):
               'ring': ring, 'current': current}
 
         return IV
-        
+
     def load_CV(self):
         #voltage, current, capacitance, dvalue
         data = np.loadtxt(self.infile, delimiter=',', skiprows=1)
@@ -155,31 +181,28 @@ class Sensor(object):
         CV = {'voltage': voltage, 'current': current,
               'capacitance': capacitance, 'dvalue': dvalue,
               'invsquarecapacitance': invsquarecapacitance}
-        
+
         width, profile = analyze_CV(CV, self.area)
         CV['width'] = width
         CV['profile'] = profile
 
         return CV
-    
+
 class Wafer(object):
-    def __init__(self, path, site, wafer, area):
+    def __init__(self, path, site, wafer, area=None):
         self.path = path
         self.site = site
         self.wafer = wafer
         self.area = area
-        
+
         self.inpath_to_IV = self.path + self.wafer + '/IV/'
         self.inpath_to_CV = self.path + self.wafer + '/CV/'
 
-        # self.outpath_to_IV = './' + self.site + '/IV/'
-        # self.outpath_to_CV = './' + self.site + '/CV/'
-
-        self.outpath = self.path + 'Results/'
+        self.outpath = 'results/' + datetime.today().strftime("%Y-%m-%d")
         mkdir(self.outpath)
 
-        self.outpath_to_IV = self.outpath + '/IV/'
-        self.outpath_to_CV = self.outpath + '/CV/'
+        self.outpath_to_IV = self.outpath + '/' + self.site + '/IV/'
+        self.outpath_to_CV = self.outpath + '/' + self.site + '/CV/'
 
         self.load_IVs()
         self.load_CVs()
@@ -189,7 +212,7 @@ class Wafer(object):
 
         self.IVs = collections.OrderedDict()
         for infile, sensor in zip(infiles, sensors):
-            self.IVs[sensor] = Sensor(infile, self.area).load_IV()
+            self.IVs[sensor] = Sensor(infile).load_IV()
 
     def load_CVs(self):
         infiles, sensors = get_list_of_infiles(self.inpath_to_CV)
@@ -198,35 +221,36 @@ class Wafer(object):
         for infile, sensor in zip(infiles, sensors):
             self.CVs[sensor] = Sensor(infile, self.area).load_CV()
 
-    def plot_IVs(self):
+    def plot_IVs(self, ylog=True):
         mkdir(self.outpath_to_IV)
 
         ### pad ###
-        plt.figure('pad current vs. voltage' , figsize=(12,8))
+        fig = plt.figure('pad current vs. voltage' , figsize=(12,8))
+        ax = fig.add_subplot(111)
         for n, (sensor, IV) in enumerate(self.IVs.items()):
             plt.plot(IV['voltage'], IV['pad'], 'o--', label=sensor, color=colors[n])
 
-        if (self.site == 'HAMA'):
+        if ylog:
             plt.yscale('log')
-
-        setYlim(plt.ylim(), plt.yticks())
+        autoscale_y(ax, margin=5)
         plt.xlabel('V$_{Rev}$ [V]')
         plt.ylabel('I$_{Pad}$ [uA]')
         plt.legend(loc=9, ncol=3)
         plt.grid(False)
-     
+
         plt.savefig(self.outpath_to_IV + '/' + self.wafer + '-padIV.pdf')
         plt.clf()
         plt.close()
 
         ### ring ###
-        plt.figure('ring current vs. voltage' , figsize=(12,8))
+        fig = plt.figure('ring current vs. voltage' , figsize=(12,8))
+        ax = fig.add_subplot(111)
         for n, (sensor, IV) in enumerate(self.IVs.items()):
             plt.plot(IV['voltage'], IV['ring'], 'o--', label=sensor, color=colors[n])
 
-        plt.yscale('log')
-
-        setYlim(plt.ylim(), plt.yticks())
+        if ylog:
+            plt.yscale('log')
+        autoscale_y(ax, margin=5)
         plt.xlabel('V$_{Rev}$ [V]')
         plt.ylabel('I$_{Ring}$ [uA]')
         plt.legend(loc=9, ncol=3)
@@ -239,14 +263,14 @@ class Wafer(object):
     def plot_CVs(self):
         mkdir(self.outpath_to_CV)
 
-        plt.figure('cv analysis' , figsize=(12,8))
-
         ### capacitance ###
-        plt.subplot(111)
+        fig = plt.figure('cv analysis', figsize=(12, 8))
+        ax = fig.add_subplot(111)
+
         for n, (sensor, CV) in enumerate(self.CVs.items()):
             plt.plot(CV['voltage'], CV['capacitance'], 'o--', label=sensor, color=colors[n])
 
-        setYlim(plt.ylim(), plt.yticks())
+        autoscale_y(ax, margin=0.1)
         plt.xlabel('V$_{Rev}$ [V]')
         plt.ylabel('C [pF]')
         plt.legend(loc=9, ncol=3)
@@ -256,14 +280,14 @@ class Wafer(object):
         plt.clf()
         plt.close()
 
-        plt.figure('cv analysis', figsize=(12, 8))
-
         ### invsquarecapacitance ###
-        plt.subplot(111)
+        fig = plt.figure('cv analysis', figsize=(12, 8))
+        ax = fig.add_subplot(111)
+
         for n, (sensor, CV) in enumerate(self.CVs.items()):
             plt.plot(CV['voltage'], CV['invsquarecapacitance'], 'o--', label=sensor, color=colors[n])
 
-        setYlim(plt.ylim(), plt.yticks())
+        autoscale_y(ax, margin=0.1)
         plt.xlabel('V$_{Rev}$ [V]')
         plt.ylabel('C$^{-2}$ [pF]$^{-2}$')
         plt.legend(loc=9, ncol=3)
@@ -273,23 +297,10 @@ class Wafer(object):
         plt.clf()
         plt.close()
 
-        ### dvalue ###
-        '''
-        plt.subplot(111)
-        for n, (sensor, CV) in enumerate(self.CVs.items()):
-            plt.plot(CV['voltage'], CV['dvalue'], 'o--', label=sensor, color=colors[n])
-
-        setYlim(plt.ylim(), plt.yticks())
-        plt.xlabel('V$_{Rev}$ [V]')
-        plt.ylabel('D')
-        plt.legend(loc=9, ncol=3)
-        plt.grid(False)
-        '''
-
-        fig = plt.figure('cv analysis', figsize=(12, 8))
-
         ### profile ###
+        fig = plt.figure('cv analysis', figsize=(12, 8))
         ax = fig.add_subplot(111)
+
         for n, (sensor, CV) in enumerate(self.CVs.items()):
             plt.plot(CV['width'], CV['profile'], 'o--', label=sensor, color=colors[n])
 
@@ -302,8 +313,7 @@ class Wafer(object):
         ax.tick_params(axis='x', reset=False, which='major', length=6, width=2)
         ax.tick_params(axis='x', reset=False, which='minor', length=3, width=2)
 
-        plt.ylim(-0.25 * 10**16, 3.0 * 10**16)
-        setYlim(plt.ylim(), plt.yticks())
+        autoscale_y(ax, margin=0.1)
         plt.xlabel('Width [um]')
         plt.ylabel('Doping Concentration [cm]$^{-3}$')
         plt.legend(loc=9, ncol=3)
@@ -314,19 +324,22 @@ class Wafer(object):
         plt.close()
 
 class Site(object):
-    def __init__(self, path, site, wafers, area):
+    def __init__(self, path, site, wafers, area=None):
         self.path = path
         self.site = site
         self.wafers = wafers
         self.area = area
 
-    def show(self):
+    def show(self, IV=False, CV=False):
         for wafer in self.wafers:
             theWafer = Wafer(self.path, self.site, wafer, self.area)
-            theWafer.plot_IVs()
-            theWafer.plot_CVs()
+            if IV:
+                theWafer.plot_IVs()
+            if CV:
+                theWafer.plot_CVs()
 
-# directory = '/Users/zschillaci/Google Drive/TANDEM - Diodes for dosimeters and LGADs - Sept 2018/JSI_Irradiation/'
+'''
+# December 2018
 directory = '/Users/zschillaci/Google Drive/Sharable Silicon R&D Info/Measurements/JSI_Irradiation_Nov-Dec2018/'
 
 ### CNM-AIDA ###
@@ -337,7 +350,7 @@ wafers = ['W3', 'W5', 'W7', 'W9', 'W11', 'W14']
 area = (1.0 * 10**-3)**2  # 1.0mm by 1.0mm
 
 CNM = Site(path, site, wafers, area)
-CNM.show()
+CNM.show(IV=True, CV=True)
 
 ### HAMA ###
 
@@ -347,5 +360,16 @@ wafers = ['EXX28995-WNo8', 'EDX28976-WNo2']
 area = (1.3 * 10**-3)**2 # 1.3mm by 1.3mm
 
 HAMA = Site(path, site, wafers, area)
-HAMA.show()
+HAMA.show(IV=True, CV=True)
+'''
 
+# May 2019
+directory = '/Users/zschillaci/Google Drive/LGAD Backup/'
+
+path = directory + 'hamamatsu-sensors/'
+site = 'HAMA'
+wafers = ['EXX30327-WNo1', 'EXX30327-WNo3', 'EXX30327-WNo6', 'EXX30327-WNo5', 'EXX30328-WNo1']
+area = None
+
+HAMA = Site(path, site, wafers, area)
+HAMA.show(IV=True)
