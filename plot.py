@@ -368,7 +368,9 @@ directory = '/Users/zschillaci/Google Drive/LGAD Backup/'
 
 path = directory + 'hamamatsu-sensors/'
 site = 'HAMA'
-wafers = ['EXX30327-WNo1', 'EXX30327-WNo3', 'EXX30327-WNo6', 'EXX30327-WNo5', 'EXX30328-WNo1']
+wafers = ['EXX30327-WNo1', 'EXX30327-WNo3', 'EXX30327-WNo4',
+          'EXX30327-WNo5', 'EXX30327-WNo6', 'EXX30328-WNo1',
+          'EXX30328-WNo2', 'EXX30328-WNo3']
 area = None
 
 HAMA = Site(path, site, wafers, area)
