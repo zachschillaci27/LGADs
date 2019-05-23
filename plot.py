@@ -3,6 +3,7 @@ import os
 import glob
 import collections
 import numpy as np
+import pandas as pd
 from datetime import datetime
 import matplotlib.pyplot as plt
 
@@ -96,28 +97,17 @@ def autoscale_y(ax, margin=0.1):
 
     ax.set_ylim(bot, top)
 
-def setYlim(ylim, yticks):
-    #Set y-limits of plot based upon min. and max. of plots
-
-    tick = abs(yticks[0][1] - yticks[0][0])
-
-    low = ylim[0] - 10 * tick
-    high = ylim[-1] + 10 * tick
-
-    plt.ylim(low, high)
-
 def calculate_width(C, A):
     #C = eps * A / d
     return (0 if (C == 0) else ((eps_si * eps0 * A) / C))
 
-def analyze_CV(CV, area):
+def get_doping_profile(CV, area):
     #N = (-C**3 / q * eps * A**2) / [dC/dV]
     #N = (2 / q * eps * A**2) / [d(C**-2)/dV]
 
     constant = 1 / (q * eps_si * (10**-2 * eps0) * (10**4 * area)**2) # cm^-3
 
     width, profile = [], []
-
     for n in range(len(CV['voltage'])):
 
         dV, dC = 0, 0
@@ -141,7 +131,10 @@ def analyze_CV(CV, area):
         width.append(w)
         profile.append(N)
 
-    return width, profile
+    CV['width'] = width
+    CV['profile'] = profile
+
+    return CV
 
 class Sensor(object):
     def __init__(self, infile, area=None):
@@ -159,34 +152,29 @@ class Sensor(object):
             ring.append(i_scale * row[2])
             current.append(i_scale * row[3])
 
-        IV = {'voltage': voltage, 'pad': pad,
-              'ring': ring, 'current': current}
+        self.IV = pd.DataFrame({'voltage': voltage, 'pad': pad, 
+                                'ring': ring, 'current': current})
 
-        return IV
+        return self.IV
 
     def load_CV(self):
         #voltage, current, capacitance, dvalue
         data = np.loadtxt(self.infile, delimiter=',', skiprows=1)
 
-        voltage, current, capacitance, dvalue = [], [], [], []
-        invsquarecapacitance = []
+        voltage, current, capacitance, dvalue, invsquarecapacitance = [], [], [], [], []
         for n, row in enumerate(data):
             voltage.append(abs(row[0]))
             current.append(row[1])
             capacitance.append(c_scale * row[2])
             dvalue.append(row[3])
-
             invsquarecapacitance.append(0 if (capacitance[n] == 0) else (1 / capacitance[n]**2))
 
-        CV = {'voltage': voltage, 'current': current,
-              'capacitance': capacitance, 'dvalue': dvalue,
-              'invsquarecapacitance': invsquarecapacitance}
+        self.CV = pd.DataFrame({'voltage': voltage, 'current': current,
+                                'capacitance': capacitance, 'dvalue': dvalue,
+                                'invsquarecapacitance': invsquarecapacitance})
+        self.CV = get_doping_profile(self.CV, self.area)
 
-        width, profile = analyze_CV(CV, self.area)
-        CV['width'] = width
-        CV['profile'] = profile
-
-        return CV
+        return self.CV        
 
 class Wafer(object):
     def __init__(self, path, site, wafer, area=None):
