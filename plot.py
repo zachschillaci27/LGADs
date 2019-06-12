@@ -64,7 +64,7 @@ def get_list_of_infiles(path):
     if os.path.isdir(path):
         allfiles = glob.glob(path + '*.txt')
         for afile in allfiles:
-            if (('log' not in afile) and ('note' not in afile) and ('v2' not in afile)):
+            if (('log' not in afile) and ('note' not in afile) and ('noring' not in afile) and (afile.replace('v2','') not in infiles)):
                 index = len(afile) - afile[::-1].find('/')
 
                 infiles.append(afile)
@@ -143,7 +143,7 @@ class Sensor(object):
 
     def load_IV(self):
         #voltage, pad, ring, current
-        data = np.loadtxt(self.infile, delimiter=',', skiprows=3)
+        data = np.loadtxt(self.infile, delimiter=',', skiprows=4)
 
         voltage, pad, ring, current = [], [], [], []
         for row in data:
@@ -319,7 +319,9 @@ class Site(object):
         self.area = area
 
     def show(self, IV=False, CV=False):
+        print('Site:', site)
         for wafer in self.wafers:
+            print('Wafer:', wafer)
             theWafer = Wafer(self.path, self.site, wafer, self.area)
             if IV:
                 theWafer.plot_IVs()
@@ -356,11 +358,19 @@ directory = '/Users/zschillaci/Google Drive/LGAD Backup/'
 
 path = directory + 'hamamatsu-sensors/'
 site = 'HAMA'
-wafers = ['EDX30329-WNo12',
-          'EXX30327-WNo1', 'EXX30327-WNo3', 'EXX30327-WNo4',
-          'EXX30327-WNo5', 'EXX30327-WNo6', 'EXX30328-WNo1',
-          'EXX30328-WNo2', 'EXX30328-WNo3', 'EXX30328-WNo4',
-          'EXX30328-WNo5']
+wafers = ['EDX30329-WNo12',     'EXX30330-WNo11',       'EXX30330-WNo12',
+          'EXX30327-WNo1',      'EXX30327-WNo3',        'EXX30327-WNo4',
+          'EXX30327-WNo5',      'EXX30327-WNo6',        'EXX30328-WNo1',
+          'EXX30328-WNo2',      'EXX30328-WNo3',        'EXX30328-WNo4',
+          'EXX30328-WNo5',      'EDX30329-WNo9',        'EDX30329-WNo9-5x5',
+          'EDX30329-WNo10',     'EDX30329-WNo11',       'EDX30329-WNo11-2x2',
+          'EDX30329-WNo11-5x5', 'EXX30327-WNo1-5x5',    'EXX30327-WNo4-2x2',
+          'EXX30327-WNo4-5x5',  'EXX30327-WNo5-5x5',    'EXX30327-WNo6-5x5',
+          'EXX30328-WNo1-5x5',  'EXX30328-WNo2-5x5',    'EXX30328-WNo3-2x2',
+          'EXX30328-WNo3-5x5',  'EXX30328-WNo5-5x5-P4', 'EXX30328-WNo5-5x5-P5',
+          'EXX30330-WNo11-5x5', 'EXX30330-WNo12-5x5',   'EXX30330-WNo13',
+          'EXX30330-WNo14',     'EXX30330-WNo14-5x5']
+
 area = None
 
 HAMA = Site(path, site, wafers, area)
